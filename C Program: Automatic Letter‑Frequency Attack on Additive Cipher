@@ -1,0 +1,98 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_TEXT 10000
+
+// English frequency table (%) for scoring
+double englishFreq[26] = {
+    8.167, 1.492, 2.782, 4.253, 12.702, 2.228, 2.015,
+    6.094, 6.966, 0.153, 0.772, 4.025, 2.406, 6.749,
+    7.507, 1.929, 0.095, 5.987, 6.327, 9.056, 2.758,
+    0.978, 2.360, 0.150, 1.974, 0.074
+};
+
+// Structure to store score + plaintext
+typedef struct {
+    double score;
+    char plaintext[MAX_TEXT];
+    int key;
+} Candidate;
+
+// Compute frequency score for a plaintext
+double score_text(const char *text) {
+    int count[26] = {0};
+    int total = 0;
+
+    for (int i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            count[toupper(text[i]) - 'A']++;
+            total++;
+        }
+    }
+    if (total == 0) return 0.0;
+
+    double score = 0.0;
+    for (int i = 0; i < 26; i++) {
+        double freq = (count[i] * 100.0) / total;
+        score += freq * englishFreq[i];
+    }
+    return score;
+}
+
+// Decrypt using additive cipher key
+void decrypt_additive(const char *cipher, int key, char *output) {
+    for (int i = 0; cipher[i]; i++) {
+        char c = cipher[i];
+        if (isalpha(c)) {
+            int x = toupper(c) - 'A';
+            x = (x - key + 26) % 26;
+            output[i] = x + 'A';
+        } else {
+            output[i] = c;
+        }
+    }
+    output[strlen(cipher)] = '\0';
+}
+
+// Compare candidates for sorting (descending)
+int cmpCandidates(const void *a, const void *b) {
+    double diff = ((Candidate *)b)->score - ((Candidate *)a)->score;
+    if (diff > 0) return 1;
+    if (diff < 0) return -1;
+    return 0;
+}
+
+int main() {
+    char ciphertext[MAX_TEXT];
+    int topN;
+
+    printf("Enter ciphertext: ");
+    fgets(ciphertext, MAX_TEXT, stdin);
+    ciphertext[strcspn(ciphertext, "\n")] = 0;
+
+    printf("How many top plaintexts to show (e.g., 10)? ");
+    scanf("%d", &topN);
+
+    Candidate candidates[26];
+
+    // Try all 26 possible keys
+    for (int key = 0; key < 26; key++) {
+        decrypt_additive(ciphertext, key, candidates[key].plaintext);
+        candidates[key].score = score_text(candidates[key].plaintext);
+        candidates[key].key = key;
+    }
+
+    // Sort by likelihood
+    qsort(candidates, 26, sizeof(Candidate), cmpCandidates);
+
+    printf("\n===== Top %d Likely Plaintexts =====\n\n", topN);
+
+    for (int i = 0; i < topN && i < 26; i++) {
+        printf("Rank %d | Key = %2d | Score = %.2f\n%s\n\n",
+               i + 1, candidates[i].key, candidates[i].score, candidates[i].plaintext);
+    }
+
+    return 0;
+}
