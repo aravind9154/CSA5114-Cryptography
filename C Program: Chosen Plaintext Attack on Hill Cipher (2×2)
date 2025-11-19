@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MOD 26
+
+// Function to print a 2x2 matrix
+void printMatrix(const char *msg, int M[2][2]) {
+    printf("%s\n", msg);
+    printf("%d %d\n%d %d\n\n", M[0][0], M[0][1], M[1][0], M[1][1]);
+}
+
+// Encrypt plaintext vector P using key matrix K
+void encrypt(int K[2][2], int P[2], int C[2]) {
+    C[0] = (K[0][0]*P[0] + K[0][1]*P[1]) % MOD;
+    C[1] = (K[1][0]*P[0] + K[1][1]*P[1]) % MOD;
+}
+
+// Converts two letters into vector
+void lettersToVector(const char *s, int V[2]) {
+    V[0] = s[0] - 'A';
+    V[1] = s[1] - 'A';
+}
+
+// Converts vector to letters
+void vectorToLetters(int V[2], char out[3]) {
+    out[0] = V[0] + 'A';
+    out[1] = V[1] + 'A';
+    out[2] = '\0';
+}
+
+int main() {
+    // ===========================================================
+    // STEP 1: Choose a key matrix (secret from attacker)
+    // ===========================================================
+    int K[2][2] = {
+        {3, 3},
+        {2, 5}
+    };
+
+    printMatrix("Secret Key Matrix (unknown to attacker):", K);
+
+    // ===========================================================
+    // STEP 2: Chosen Plaintext Selection
+    // We choose plaintext vectors equal to identity matrix:
+    // P1 = [1, 0]^T
+    // P2 = [0, 1]^T
+    // ===========================================================
+    int P1[2] = {1, 0};
+    int P2[2] = {0, 1};
+
+    int C1[2], C2[2];
+
+    // ===========================================================
+    // STEP 3: Encrypt chosen plaintexts
+    // ===========================================================
+    encrypt(K, P1, C1);
+    encrypt(K, P2, C2);
+
+    // ===========================================================
+    // STEP 4: Attacker receives ciphertexts C1 and C2
+    // and reconstructs key matrix K
+    // Because:
+    // K × I = K
+    // ===========================================================
+
+    int RecoveredK[2][2] = {
+        {C1[0], C2[0]},
+        {C1[1], C2[1]}
+    };
+
+    printMatrix("Recovered Key Matrix (Attacker Found):", RecoveredK);
+
+    printf("Chosen plaintext attack successful!\n");
+
+    return 0;
+}
