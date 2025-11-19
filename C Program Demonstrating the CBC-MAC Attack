@@ -1,0 +1,79 @@
+/*
+ * Demonstration of CBC-MAC vulnerability on variable-length messages
+ * CBC-MAC(K, X) = T
+ * For two-block message: X || (X XOR T)
+ * CBC-MAC(K, X || (X XOR T)) = T   (MAC is forgeable)
+ *
+ * Compile: gcc cbc_mac_attack.c -lcrypto -o cbc_mac_attack
+ */
+
+#include <stdio.h>
+#include <string.h>
+#include <openssl/aes.h>
+#include <openssl/rand.h>
+
+#define BLOCK 16
+
+void xor_block(unsigned char *out, unsigned char *a, unsigned char *b) {
+    for (int i = 0; i < BLOCK; i++)
+        out[i] = a[i] ^ b[i];
+}
+
+void cbc_mac(unsigned char *mac,
+             unsigned char *key,
+             unsigned char *msg,
+             int blocks)
+{
+    AES_KEY aes_key;
+    AES_set_encrypt_key(key, 128, &aes_key);
+
+    unsigned char state[BLOCK] = {0};
+
+    for (int i = 0; i < blocks; i++) {
+        unsigned char temp[BLOCK];
+        xor_block(temp, state, msg + i * BLOCK);
+        AES_encrypt(temp, state, &aes_key);
+    }
+    memcpy(mac, state, BLOCK);
+}
+
+int main() {
+    unsigned char key[BLOCK];
+    unsigned char X[BLOCK];
+    unsigned char T[BLOCK];
+    unsigned char forged_mac[BLOCK];
+
+    RAND_bytes(key, BLOCK);
+    RAND_bytes(X, BLOCK);
+
+    printf("Original message X:\n");
+    for (int i = 0; i < BLOCK; i++) printf("%02X ", X[i]);
+    printf("\n");
+
+    /* Compute MAC(K, X) = T */
+    cbc_mac(T, key, X, 1);
+
+    printf("\nCBC-MAC(K, X) = T:\n");
+    for (int i = 0; i < BLOCK; i++) printf("%02X ", T[i]);
+    printf("\n");
+
+    /* Construct X2 = X XOR T */
+    unsigned char X2[BLOCK];
+    xor_block(X2, X, T);
+
+    /* Full forged message = X || X2 */
+    unsigned char forged_msg[2 * BLOCK];
+    memcpy(forged_msg, X, BLOCK);
+    memcpy(forged_msg + BLOCK, X2, BLOCK);
+
+    /* Compute CBC-MAC(K, X || X2) */
+    cbc_mac(forged_mac, key, forged_msg, 2);
+
+    printf("\nCBC-MAC(K, X || (X XOR T)):\n");
+    for (int i = 0; i < BLOCK; i++) printf("%02X ", forged_mac[i]);
+    printf("\n");
+
+    printf("\nObservation: forged MAC equals original T → attack successful.\n");
+
+    return 0;
+}
