@@ -1,0 +1,145 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define ALPH 26
+#define MAX_TEXT 5000
+#define MAX_CANDIDATES 50
+
+// English letter frequency order (most → least common)
+char english_freq_order[] = {
+    'E','T','A','O','I','N','S','H','R','D','L','C',
+    'U','M','W','F','G','Y','P','B','V','K','J','X','Q','Z'
+};
+
+typedef struct {
+    char mapping[26];
+    double score;
+} Candidate;
+
+int cmpfreq(const void *a, const void *b) {
+    return ((int)(*(int*)b) - (*(int*)a));
+}
+
+int cmp_candidates(const void *a, const void *b) {
+    double diff = ((Candidate*)b)->score - ((Candidate*)a)->score;
+    return (diff > 0) - (diff < 0);
+}
+
+// Score plaintext by counting common words
+double score_plaintext(char *text) {
+    const char *common_words[] = {"THE","AND","TO","OF","IS","IN","IT","THAT","FOR"};
+    double score = 0;
+
+    for (int i = 0; i < 9; i++) {
+        char *p = strstr(text, common_words[i]);
+        while (p) {
+            score += 5;
+            p = strstr(p + 1, common_words[i]);
+        }
+    }
+
+    // Extra scoring for spaces and vowels
+    for (int i = 0; text[i]; i++) {
+        if (text[i] == ' ') score += 0.2;
+        if (strchr("AEIOU", text[i])) score += 0.05;
+    }
+
+    return score;
+}
+
+// Apply substitution
+void decrypt_with_map(char *cipher, char *plain, char mapping[]) {
+    for (int i = 0; cipher[i]; i++) {
+        char ch = cipher[i];
+        if (isalpha(ch)) {
+            int idx = toupper(ch) - 'A';
+            plain[i] = mapping[idx];
+        } else {
+            plain[i] = ch;
+        }
+    }
+}
+
+// Build candidate
+void build_candidate(char *cipher, int c_freq_index[], Candidate *cand) {
+    for (int i = 0; i < ALPH; i++) {
+        cand->mapping[c_freq_index[i]] = english_freq_order[i];
+    }
+
+    char plaintext[MAX_TEXT];
+    decrypt_with_map(cipher, plaintext, cand->mapping);
+
+    cand->score = score_plaintext(plaintext);
+}
+
+int main() {
+    char cipher[MAX_TEXT];
+    int topN;
+
+    printf("Enter ciphertext: ");
+    fgets(cipher, MAX_TEXT, stdin);
+
+    printf("How many top plaintext candidates do you want? ");
+    scanf("%d", &topN);
+    if (topN > MAX_CANDIDATES) topN = MAX_CANDIDATES;
+
+    int freq[26] = {0};
+    int index[26];
+
+    for (int i = 0; i < 26; i++) index[i] = i;
+
+    // Count frequency
+    for (int i = 0; cipher[i]; i++) {
+        char ch = toupper(cipher[i]);
+        if (ch >= 'A' && ch <= 'Z') {
+            freq[ch - 'A']++;
+        }
+    }
+
+    // Sort by frequency
+    for (int i = 0; i < 26; i++) {
+        for (int j = i+1; j < 26; j++) {
+            if (freq[index[j]] > freq[index[i]]) {
+                int temp = index[i];
+                index[i] = index[j];
+                index[j] = temp;
+            }
+        }
+    }
+
+    Candidate candidates[MAX_CANDIDATES];
+
+    // Generate multiple candidates by slight variations
+    for (int i = 0; i < topN; i++) {
+        int c_index_copy[26];
+        memcpy(c_index_copy, index, sizeof(index));
+
+        // Small swap to produce variations
+        if (i > 0 && i < 26) {
+            int t = c_index_copy[i];
+            c_index_copy[i] = c_index_copy[i - 1];
+            c_index_copy[i - 1] = t;
+        }
+
+        build_candidate(cipher, c_index_copy, &candidates[i]);
+    }
+
+    // Sort by score
+    qsort(candidates, topN, sizeof(Candidate), cmp_candidates);
+
+    printf("\n===== TOP %d POSSIBLE PLAINTEXTS =====\n", topN);
+
+    for (int i = 0; i < topN; i++) {
+        char plaintext[MAX_TEXT];
+        decrypt_with_map(cipher, plaintext, candidates[i].mapping);
+
+        printf("\nRank #%d (Score: %.2f):\n%s\n",
+               i + 1,
+               candidates[i].score,
+               plaintext);
+    }
+
+    return 0;
+}
