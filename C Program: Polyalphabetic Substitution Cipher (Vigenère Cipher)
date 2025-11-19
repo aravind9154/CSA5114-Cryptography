@@ -1,0 +1,51 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+// Function to encrypt plaintext using key
+void vigenereEncrypt(char plaintext[], char key[], char cipher[]) {
+    int pLen = strlen(plaintext);
+    int kLen = strlen(key);
+    int j = 0;
+
+    for (int i = 0; i < pLen; i++) {
+        char p = plaintext[i];
+
+        if (isalpha(p)) {
+            char base = isupper(p) ? 'A' : 'a';
+            char k = toupper(key[j % kLen]) - 'A';  // shift value
+
+            cipher[i] = (p - base + k) % 26 + base;
+            j++;  // move to next key letter only if plaintext is a letter
+        } else {
+            cipher[i] = p; // keep spaces/punctuation unchanged
+        }
+    }
+
+    cipher[pLen] = '\0';
+}
+
+int main() {
+    char plaintext[200], key[50], cipher[200];
+
+    printf("Enter plaintext: ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+
+    printf("Enter key (letters only): ");
+    scanf("%s", key);
+
+    // Convert key to uppercase
+    for (int i = 0; key[i] != '\0'; i++) {
+        if (!isalpha(key[i])) {
+            printf("Invalid key! Use letters only.\n");
+            return 1;
+        }
+        key[i] = toupper(key[i]);
+    }
+
+    vigenereEncrypt(plaintext, key, cipher);
+
+    printf("\nEncrypted Ciphertext: %s\n", cipher);
+
+    return 0;
+}
