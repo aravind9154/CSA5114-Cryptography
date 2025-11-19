@@ -1,0 +1,62 @@
+#include <stdio.h>
+
+// Compute GCD
+int gcd(int a, int b) {
+    while (b != 0) {
+        int t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+// Encrypt: C = (a*p + b) mod 26
+int affine_encrypt(int p, int a, int b) {
+    return (a * p + b) % 26;
+}
+
+// Compute modular inverse of a mod 26
+int mod_inverse(int a) {
+    for (int x = 0; x < 26; x++)
+        if ((a * x) % 26 == 1)
+            return x;
+    return -1;
+}
+
+// Decrypt: P = a_inv * (C - b) mod 26
+int affine_decrypt(int c, int a, int b) {
+    int a_inv = mod_inverse(a);
+    if (a_inv == -1) return -1; // no inverse -> not one-to-one
+    return (a_inv * (c - b + 26)) % 26;
+}
+
+int main() {
+    int a, b;
+
+    printf("Enter key values a and b: ");
+    scanf("%d %d", &a, &b);
+
+    // Check one-to-one condition
+    if (gcd(a, 26) != 1) {
+        printf("\nERROR: Cipher is NOT one-to-one because gcd(%d, 26) != 1.\n", a);
+        printf("Decryption is impossible.\n");
+        return 0;
+    }
+
+    printf("\nCipher IS one-to-one. Proceeding...\n");
+
+    char text[100];
+    printf("Enter plaintext (A–Z): ");
+    scanf("%s", text);
+
+    // Encrypt
+    for (int i = 0; text[i]; i++) {
+        int p = text[i] - 'A';
+        int c = affine_encrypt(p, a, b);
+        text[i] = 'A' + c;
+    }
+
+    printf("Ciphertext: %s\n", text);
+
+    return 0;
+}
