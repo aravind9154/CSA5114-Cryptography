@@ -1,0 +1,106 @@
+#include <stdio.h>
+#include <string.h>
+
+// Permuted Choice 1 (PC-1) – 64-bit key → 56-bit
+int PC1[56] = {
+    57,49,41,33,25,17,9, 
+    1,58,50,42,34,26,18,
+    10,2,59,51,43,35,27,
+    19,11,3,60,52,44,36,
+    63,55,47,39,31,23,15,
+    7,62,54,46,38,30,22,
+    14,6,61,53,45,37,29,
+    21,13,5,28,20,12,4
+};
+
+// Permuted Choice 2 (PC-2) – 56-bit → 48-bit subkey
+int PC2[48] = {
+    14,17,11,24,1,5,
+    3,28,15,6,21,10,
+    23,19,12,4,26,8,
+    16,7,27,20,13,2,
+    41,52,31,37,47,55,
+    30,40,51,45,33,48,
+    44,49,39,56,34,53,
+    46,42,50,36,29,32
+};
+
+// DES shift schedule (encryption)
+int SHIFTS[16] = { 
+    1, 1, 2, 2, 
+    2, 2, 2, 2, 
+    1, 2, 2, 2, 
+    2, 2, 2, 1 
+};
+
+// Reverse shift schedule for *decryption*
+int REVERSE_SHIFTS[16];
+
+// left circular shift
+void leftShift(char *half, int shifts) {
+    char temp[28];
+    for (int i = 0; i < 28; i++)
+        temp[i] = half[(i + shifts) % 28];
+    memcpy(half, temp, 28);
+}
+
+// Apply PC-1 to get 56-bit key
+void applyPC1(char *input, char *output) {
+    for (int i = 0; i < 56; i++)
+        output[i] = input[PC1[i] - 1];
+}
+
+// Apply PC-2 to get 48-bit subkey
+void applyPC2(char *input, char *output) {
+    for (int i = 0; i < 48; i++)
+        output[i] = input[PC2[i] - 1];
+}
+
+int main() {
+
+    // 1. Generate reverse shift schedule
+    printf("Generating reverse shift schedule...\n");
+    for (int i = 0; i < 16; i++)
+        REVERSE_SHIFTS[i] = SHIFTS[15 - i];
+
+    // Print reverse shifts
+    printf("Reverse shift schedule for decryption:\n");
+    for (int i = 0; i < 16; i++)
+        printf("%d ", REVERSE_SHIFTS[i]);
+    printf("\n\n");
+
+    // Example 64-bit key (in binary)
+    char key64[64] = {
+        0,0,1,1,0,0,1,1,  0,1,0,1,1,0,1,0,
+        1,0,1,0,0,1,1,1,  1,1,0,1,0,0,1,0,
+        1,1,0,1,0,1,1,1,  0,0,1,1,1,0,1,1,
+        1,1,0,0,1,0,0,1,  0,1,1,0,0,1,0,1
+    };
+
+    // Step 1: Apply PC-1
+    char key56[56];
+    applyPC1(key64, key56);
+
+    // Split into C and D halves
+    char C[28], D[28];
+    memcpy(C, key56, 28);
+    memcpy(D, key56 + 28, 28);
+
+    char allKeys[16][48];
+
+    // Step 2: Generate reverse keys
+    printf("Generating 16 round keys (for decryption):\n\n");
+
+    for (int round = 0; round < 16; round++) {
+        leftShift(C, REVERSE_SHIFTS[round]);
+        leftShift(D, REVERSE_SHIFTS[round]);
+
+        char CD[56];
+        memcpy(CD, C, 28);
+        memcpy(CD + 28, D, 28);
+
+        applyPC2(CD, allKeys[round]);
+
+        printf("K%d (decryption) = ", round + 1);
+        for (int i = 0; i < 48; i++)
+            printf("%d", allK
