@@ -1,0 +1,72 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 5
+
+// Playfair key square
+char keySquare[SIZE][SIZE] = {
+    {'R','O','Y','A','L'},
+    {'N','E','W','Z','D'},
+    {'V','B','C','F','G'},
+    {'H','I','K','M','P'},
+    {'Q','S','T','U','X'}
+};
+
+// Find row and column of a character
+void findPosition(char ch, int *row, int *col) {
+    if (ch == 'J') ch = 'I';  // Treat J as I
+
+    for (int i = 0; i < SIZE; i++)
+        for (int j = 0; j < SIZE; j++)
+            if (keySquare[i][j] == ch) {
+                *row = i;
+                *col = j;
+                return;
+            }
+}
+
+// Decrypt a pair of characters
+void decryptPair(char a, char b) {
+    int r1, c1, r2, c2;
+    findPosition(a, &r1, &c1);
+    findPosition(b, &r2, &c2);
+
+    if (r1 == r2) {  
+        // Same row → shift left
+        c1 = (c1 + SIZE - 1) % SIZE;
+        c2 = (c2 + SIZE - 1) % SIZE;
+    } 
+    else if (c1 == c2) { 
+        // Same column → shift up
+        r1 = (r1 + SIZE - 1) % SIZE;
+        r2 = (r2 + SIZE - 1) % SIZE;
+    } 
+    else { 
+        // Rectangle → swap columns
+        int temp = c1;
+        c1 = c2;
+        c2 = temp;
+    }
+
+    printf("%c%c", keySquare[r1][c1], keySquare[r2][c2]);
+}
+
+int main() {
+    char cipher[] =
+        "KXJEYUREBEZWEHEWRYTUHEYFS"
+        "KREHEGOYFIWTTTUOLKSYCAJPO"
+        "BOTEIZONTXBYBNTGONEYCUZWR"
+        "GDSONSXBOUYWRHEBAAHYUSEDQ";
+
+    int len = strlen(cipher);
+
+    printf("Decrypted Message:\n");
+
+    for (int i = 0; i < len; i += 2) {
+        decryptPair(cipher[i], cipher[i+1]);
+    }
+
+    printf("\n");
+    return 0;
+}
