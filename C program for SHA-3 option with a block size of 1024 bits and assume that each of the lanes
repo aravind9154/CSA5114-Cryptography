@@ -1,0 +1,161 @@
+/* keccak_capacity_hit.c
+ *
+ * Estimate how many permutation steps (applications of a random lane permutation)
+ * are needed until all capacity lanes (initially zero) have been visited at least once
+ * by a nonzero lane that started in one of the rate lane positions.
+ *
+ * Assumptions:
+ *  - 25 lanes (w=64, b=1600).
+ *  - rate lanes = 16 (indices 0..15), capacity lanes = 9 (indices 16..24).
+ *  - permutation treated as a uniform random permutation of {0..24}.
+ *  - tokens (nonzero lanes) start at rate indices 0..15.
+ *  - we apply the permutation repeatedly; at step t each token initially at s
+ *    has moved to perm^t(s). We ask when every capacity index has been occupied
+ *    by some token at least once.
+ *
+ * Program computes exact minimal step using cycle decomposition for each random permutation.
+ *
+ * Compile:
+ *   gcc -O2 keccak_capacity_hit.c -o keccak_capacity_hit
+ *
+ * Run:
+ *   ./keccak_capacity_hit 100000
+ *
+ * The single argument is the number of random permutations (trials).
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#define LANES 25
+#define RATE_LANES 16   /* indices 0..15 */
+#define CAP_LANES 9     /* indices 16..24 */
+
+static void shuffle(int *perm, int n) {
+    for (int i = 0; i < n; i++) perm[i] = i;
+    for (int i = n - 1; i > 0; i--) {
+        int j = rand() % (i + 1);
+        int t = perm[i]; perm[i] = perm[j]; perm[j] = t;
+    }
+}
+
+int main(int argc, char **argv) {
+    int trials = 100000;
+    if (argc >= 2) trials = atoi(argv[1]);
+    if (trials <= 0) trials = 100000;
+
+    srand((unsigned)time(NULL));
+
+    int perm[LANES];
+    int visited_step_counts[1000]; /* histogram cap */
+    for (int i = 0; i < 1000; i++) visited_step_counts[i] = 0;
+
+    long long sum_steps = 0;
+    long long successful = 0;
+    long long impossible = 0;
+    int max_observed = 0;
+
+    for (int t = 0; t < trials; t++) {
+        shuffle(perm, LANES);
+
+        /* find cycle decomposition: for each position, find cycle id, index in cycle, cycle length */
+        int seen[LANES]; for (int i = 0; i < LANES; i++) seen[i] = 0;
+        int cycle_id[LANES]; for (int i = 0; i < LANES; i++) cycle_id[i] = -1;
+        int index_in_cycle[LANES]; for (int i = 0; i < LANES; i++) index_in_cycle[i] = -1;
+        int cycle_len[LANES]; for (int i = 0; i < LANES; i++) cycle_len[i] = 0;
+
+        int cid = 0;
+        for (int i = 0; i < LANES; i++) {
+            if (seen[i]) continue;
+            /* follow cycle */
+            int cur = i;
+            int idx = 0;
+            do {
+                seen[cur] = 1;
+                cycle_id[cur] = cid;
+                index_in_cycle[cur] = idx++;
+                cur = perm[cur];
+            } while (cur != i);
+            int L = idx;
+            /* set cycle length for all members */
+            cur = i;
+            for (int j = 0; j < L; j++) {
+                cycle_len[cur] = L;
+                cur = perm[cur];
+            }
+            cid++;
+        }
+
+        /* set of cycle ids that have a starting token (rate lanes 0..15) */
+        int has_token_in_cycle[LANES]; for (int i=0;i<LANES;i++) has_token_in_cycle[i]=0;
+        for (int s = 0; s < RATE_LANES; s++) {
+            int c = cycle_id[s];
+            has_token_in_cycle[c] = 1;
+        }
+
+        /* for each capacity position, ensure its cycle is reachable */
+        int impossible_flag = 0;
+        int steps_for_capacity[CAP_LANES];
+        for (int i = 0; i < CAP_LANES; i++) steps_for_capacity[i] = 0;
+
+        for (int i = 0; i < CAP_LANES; i++) {
+            int pos = RATE_LANES + i; /* capacity positions numbered 16..24 */
+            int c = cycle_id[pos];
+            if (!has_token_in_cycle[c]) {
+                impossible_flag = 1;
+                break;
+            }
+            /* cycle length and indices */
+            int L = cycle_len[pos];
+            int idx_p = index_in_cycle[pos];
+
+            /* compute minimal positive t such that some token s in same cycle reaches pos:
+               for token at idx_s, t = (idx_p - idx_s) mod L; if zero -> L (because t must be >=1) */
+            int min_t = L+1;
+            /* iterate all starting positions and pick those in same cycle */
+            for (int s = 0; s < RATE_LANES; s++) {
+                if (cycle_id[s] != c) continue;
+                int idx_s = index_in_cycle[s];
+                int tdist = (idx_p - idx_s) % L;
+                if (tdist < 0) tdist += L;
+                if (tdist == 0) tdist = L; /* need positive number of steps */
+                if (tdist < min_t) min_t = tdist;
+            }
+            steps_for_capacity[i] = min_t;
+        }
+
+        if (impossible_flag) {
+            impossible++;
+            continue;
+        }
+
+        /* time to cover all capacity lanes is max of steps_for_capacity */
+        int steps_needed = 0;
+        for (int i = 0; i < CAP_LANES; i++)
+            if (steps_for_capacity[i] > steps_needed) steps_needed = steps_for_capacity[i];
+
+        if (steps_needed >= 1000) steps_needed = 999;
+        visited_step_counts[steps_needed]++;
+        if (steps_needed > max_observed) max_observed = steps_needed;
+
+        successful++;
+        sum_steps += steps_needed;
+    }
+
+    printf("Trials: %d  successful: %lld  impossible: %lld\n", trials, successful, impossible);
+    if (successful > 0) {
+        double avg = (double)sum_steps / (double)successful;
+        printf("Average steps (over successful trials): %.6f\n", avg);
+        printf("Max observed steps (successful trials): %d\n", max_observed);
+        printf("\nHistogram of steps needed (step : count)\n");
+        for (int i = 1; i <= max_observed; i++) {
+            if (visited_step_counts[i] > 0)
+                printf("%3d : %d\n", i, visited_step_counts[i]);
+        }
+    } else {
+        printf("No successful trial: capacity lanes never reachable in any trial.\n");
+    }
+
+    return 0;
+}
