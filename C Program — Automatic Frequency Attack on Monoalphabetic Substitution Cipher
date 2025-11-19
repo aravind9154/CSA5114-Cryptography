@@ -1,0 +1,116 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define MAX_TEXT 10000
+#define NUM_CANDIDATES 200   // Number of candidate permutations to test
+
+// English letter frequency ranking (most → least common)
+char *englishRank = "ETAOINSHRDLCUMWFGYPBVKJXQZ";
+
+// Structure to hold candidate plaintexts + score
+typedef struct {
+    double score;
+    char plaintext[MAX_TEXT];
+} Candidate;
+
+// Compute letter frequencies for ciphertext
+void compute_freq(const char *text, int freq[26]) {
+    for (int i = 0; i < 26; i++) freq[i] = 0;
+    for (int i = 0; text[i]; i++)
+        if (isalpha(text[i]))
+            freq[toupper(text[i]) - 'A']++;
+}
+
+// Score plaintext (simple scoring using English frequency)
+double score_text(const char *text) {
+    double score = 0.0;
+    for (int i = 0; text[i]; i++) {
+        char c = toupper(text[i]);
+        if (c >= 'A' && c <= 'Z') {
+            score += (26 - (strchr(englishRank, c) - englishRank));
+        }
+    }
+    return score;
+}
+
+// Create a plaintext using a given substitution map
+void apply_mapping(const char *cipher, char map[26], char *output) {
+    for (int i = 0; cipher[i]; i++) {
+        char c = cipher[i];
+        if (isalpha(c)) {
+            int idx = toupper(c) - 'A';
+            char p = map[idx];
+            output[i] = isupper(c) ? p : tolower(p);
+        } else {
+            output[i] = c;
+        }
+    }
+    output[strlen(cipher)] = '\0';
+}
+
+// Sort candidates by score (descending)
+int cmp_candidates(const void *a, const void *b) {
+    double diff = ((Candidate*)b)->score - ((Candidate*)a)->score;
+    return (diff > 0) - (diff < 0);
+}
+
+int main() {
+    char ciphertext[MAX_TEXT];
+    printf("Enter ciphertext: ");
+    fgets(ciphertext, MAX_TEXT, stdin);
+    ciphertext[strcspn(ciphertext, "\n")] = 0;
+
+    int topN;
+    printf("How many top plaintexts to show? ");
+    scanf("%d", &topN);
+
+    int freq[26];
+    compute_freq(ciphertext, freq);
+
+    // Rank ciphertext letters by frequency
+    int order[26];
+    for (int i = 0; i < 26; i++) order[i] = i;
+
+    // Sort by descending frequency
+    for (int i = 0; i < 26; i++)
+        for (int j = i + 1; j < 26; j++)
+            if (freq[order[j]] > freq[order[i]]) {
+                int temp = order[i];
+                order[i] = order[j];
+                order[j] = temp;
+            }
+
+    Candidate candidates[NUM_CANDIDATES];
+    int candidate_count = 0;
+
+    // Generate candidate plaintexts by shifting the English ranking
+    for (int shift = 0; shift < NUM_CANDIDATES; shift++) {
+        char map[26];
+
+        for (int i = 0; i < 26; i++) {
+            int cipher_letter = order[i];
+            map[cipher_letter] = englishRank[(i + shift) % 26];
+        }
+
+        apply_mapping(ciphertext, map, candidates[candidate_count].plaintext);
+        candidates[candidate_count].score =
+            score_text(candidates[candidate_count].plaintext);
+        candidate_count++;
+    }
+
+    // Sort candidates by score
+    qsort(candidates, candidate_count, sizeof(Candidate), cmp_candidates);
+
+    // Print top N candidates
+    printf("\n===== TOP %d POSSIBLE PLAINTEXTS =====\n\n", topN);
+    for (int i = 0; i < topN && i < candidate_count; i++) {
+        printf("Rank %d | Score: %.2f\n%s\n\n",
+               i + 1,
+               candidates[i].score,
+               candidates[i].plaintext);
+    }
+
+    return 0;
+}
