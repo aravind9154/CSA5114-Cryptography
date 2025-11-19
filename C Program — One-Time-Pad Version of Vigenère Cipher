@@ -1,0 +1,77 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+// Convert A-Z to 0-25
+int char_to_int(char c) {
+    return c - 'A';
+}
+
+// Convert 0-25 to A-Z
+char int_to_char(int n) {
+    return (char)(n + 'A');
+}
+
+// Generate random key stream (0–25)
+void generate_key(int *key, int len) {
+    for (int i = 0; i < len; i++) {
+        key[i] = rand() % 26;
+    }
+}
+
+// Encrypt using OTP Vigenère
+void encrypt(char *plaintext, int *key, char *cipher) {
+    int len = strlen(plaintext);
+    for (int i = 0; i < len; i++) {
+        int p = char_to_int(plaintext[i]);
+        int c = (p + key[i]) % 26;
+        cipher[i] = int_to_char(c);
+    }
+    cipher[len] = '\0';
+}
+
+// Decrypt using OTP Vigenère
+void decrypt(char *cipher, int *key, char *plain) {
+    int len = strlen(cipher);
+    for (int i = 0; i < len; i++) {
+        int c = char_to_int(cipher[i]);
+        int p = (c - key[i] + 26) % 26;
+        plain[i] = int_to_char(p);
+    }
+    plain[len] = '\0';
+}
+
+int main() {
+    srand(time(NULL));
+
+    char plaintext[200];
+    printf("Enter plaintext (A-Z only): ");
+    scanf("%s", plaintext);
+
+    int len = strlen(plaintext);
+
+    // Allocate arrays
+    int key[len];
+    char cipher[len + 1];
+    char decrypted[len + 1];
+
+    // Generate random OTP key
+    generate_key(key, len);
+
+    // Encryption
+    encrypt(plaintext, key, cipher);
+
+    // Decryption
+    decrypt(cipher, key, decrypted);
+
+    // Print key stream
+    printf("\nGenerated One-Time-Pad Key Stream:\n");
+    for (int i = 0; i < len; i++) printf("%d ", key[i]);
+
+    // Print results
+    printf("\n\nCiphertext: %s\n", cipher);
+    printf("Decrypted : %s\n", decrypted);
+
+    return 0;
+}
