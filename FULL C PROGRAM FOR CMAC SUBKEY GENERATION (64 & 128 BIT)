@@ -1,0 +1,73 @@
+#include <stdio.h>
+#include <string.h>
+
+#define BLOCK_128 16
+#define BLOCK_64   8
+
+// XOR one block with Rb (applied to last byte)
+void xor_rb(unsigned char *block, unsigned char Rb) {
+    block[(block[0] == 0 ? 0 : 0)] ^= Rb; 
+    block[BLOCK_128 - 1] ^= Rb;
+}
+
+// Left shift by 1 bit
+void left_shift(unsigned char *out, unsigned char *in, int block_size) {
+    unsigned char carry = 0;
+    for (int i = block_size - 1; i >= 0; i--) {
+        unsigned char next_carry = in[i] >> 7;
+        out[i] = (in[i] << 1) | carry;
+        carry = next_carry;
+    }
+}
+
+// CMAC subkey generation
+void generate_cmac_subkeys(unsigned char *K1, unsigned char *K2, int block_size) {
+    unsigned char L[BLOCK_128] = {0};
+
+    // ----- Simulate block cipher encryption on all-zero block -----
+    // For demonstration: just fill L with a simple pattern.
+    // In real CMAC: L = AES(K, 0^128)
+    for (int i = 0; i < block_size; i++)
+        L[i] = i + 1;
+
+    // Rb constant based on block size
+    unsigned char Rb = (block_size == 16 ? 0x87 : 0x1B);
+
+    // Generate K1
+    left_shift(K1, L, block_size);
+
+    if (L[0] & 0x80)     // if MSB(L) == 1
+        K1[block_size - 1] ^= Rb;
+
+    // Generate K2
+    left_shift(K2, K1, block_size);
+
+    if (K1[0] & 0x80)
+        K2[block_size - 1] ^= Rb;
+}
+
+void print_hex(char *name, unsigned char *b, int size) {
+    printf("%s: ", name);
+    for (int i = 0; i < size; i++)
+        printf("%02X ", b[i]);
+    printf("\n");
+}
+
+int main() {
+    unsigned char K1_128[BLOCK_128], K2_128[BLOCK_128];
+    unsigned char K1_64[BLOCK_64], K2_64[BLOCK_64];
+
+    // Generate subkeys for 128-bit CMAC
+    generate_cmac_subkeys(K1_128, K2_128, 16);
+    printf("=== CMAC Subkeys (128-bit block) ===\n");
+    print_hex("K1", K1_128, 16);
+    print_hex("K2", K2_128, 16);
+
+    // Generate subkeys for 64-bit CMAC
+    generate_cmac_subkeys(K1_64, K2_64, 8);
+    printf("\n=== CMAC Subkeys (64-bit block) ===\n");
+    print_hex("K1", K1_64, 8);
+    print_hex("K2", K2_64, 8);
+
+    return 0;
+}
