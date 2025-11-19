@@ -1,0 +1,97 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define SIZE 5
+
+// Given Playfair matrix
+char keySquare[SIZE][SIZE] = {
+    {'M','F','H','I','K'},
+    {'U','N','O','P','Q'},
+    {'Z','V','W','X','Y'},
+    {'E','L','A','R','G'},
+    {'D','S','T','B','C'}
+};
+
+// Remove non-letters, convert to uppercase, and handle I/J
+void preprocess(char text[], char out[]) {
+    int k = 0;
+    for (int i = 0; text[i] != '\0'; i++) {
+        if (isalpha(text[i])) {
+            char ch = toupper(text[i]);
+            if (ch == 'J') ch = 'I';
+            out[k++] = ch;
+        }
+    }
+    out[k] = '\0';
+}
+
+// Insert X between repeated letters; pad with X if odd length
+void makePairs(char text[], char out[]) {
+    int k = 0;
+    for (int i = 0; text[i] != '\0'; i++) {
+        out[k++] = text[i];
+        if (text[i+1] == text[i]) {
+            out[k++] = 'X';
+        }
+    }
+    if (k % 2 != 0) out[k++] = 'X';
+    out[k] = '\0';
+}
+
+// Find row and column of a character in 5×5 key
+void findPosition(char ch, int *r, int *c) {
+    for (int i = 0; i < SIZE; i++)
+        for (int j = 0; j < SIZE; j++)
+            if (keySquare[i][j] == ch) {
+                *r = i;
+                *c = j;
+                return;
+            }
+}
+
+// Encrypt a digram
+void encryptPair(char a, char b) {
+    int r1, c1, r2, c2;
+
+    findPosition(a, &r1, &c1);
+    findPosition(b, &r2, &c2);
+
+    if (r1 == r2) {
+        // Same row → shift right
+        c1 = (c1 + 1) % SIZE;
+        c2 = (c2 + 1) % SIZE;
+    }
+    else if (c1 == c2) {
+        // Same column → shift down
+        r1 = (r1 + 1) % SIZE;
+        r2 = (r2 + 1) % SIZE;
+    }
+    else {
+        // Rectangle → swap columns
+        int temp = c1;
+        c1 = c2;
+        c2 = temp;
+    }
+
+    printf("%c%c", keySquare[r1][c1], keySquare[r2][c2]);
+}
+
+int main() {
+    char message[] =
+        "Must see you over Cadogan West. Coming at once.";
+    
+    char cleaned[300], paired[300];
+
+    preprocess(message, cleaned);
+    makePairs(cleaned, paired);
+
+    printf("Encrypted Text:\n");
+
+    for (int i = 0; paired[i] != '\0'; i += 2) {
+        encryptPair(paired[i], paired[i+1]);
+    }
+
+    printf("\n");
+    return 0;
+}
