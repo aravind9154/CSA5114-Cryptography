@@ -1,0 +1,170 @@
+/* demo_dsa_rsa.c
+ *
+ * Demonstrates:
+ *  - DSA: signing same message twice with different random k => different signatures
+ *  - Textbook RSA: signing same message twice => same signature
+ *
+ * Toy parameters only (small primes) for demonstration. Do NOT use these params for real crypto.
+ */
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+#include <stdint.h>
+
+typedef long long ll;
+
+// fast modular exponentiation
+ll modexp(ll base, ll exp, ll mod) {
+    ll res = 1 % mod;
+    base %= mod;
+    while (exp > 0) {
+        if (exp & 1) res = (__int128)res * base % mod;
+        base = (__int128)base * base % mod;
+        exp >>= 1;
+    }
+    return res;
+}
+
+// extended gcd (returns gcd, and finds x,y s.t. a*x + b*y = gcd)
+ll egcd(ll a, ll b, ll *x, ll *y) {
+    if (a == 0) { *x = 0; *y = 1; return b; }
+    ll x1, y1;
+    ll g = egcd(b % a, a, &x1, &y1);
+    *x = y1 - (b / a) * x1;
+    *y = x1;
+    return g;
+}
+
+// modular inverse of a mod m (assumes gcd(a,m)=1)
+ll modinv(ll a, ll m) {
+    ll x, y;
+    ll g = egcd(llabs(a), m, &x, &y);
+    if (g != 1) return -1;
+    x %= m;
+    if (x < 0) x += m;
+    return x;
+}
+
+// Simple (non-cryptographic) hash: map string to integer
+ll simple_hash(const char *s) {
+    ll h = 0;
+    while (*s) {
+        h = (h * 131 + (unsigned char)*s) % 1000000007LL;
+        s++;
+    }
+    return h;
+}
+
+/* -------------------- Toy DSA --------------------
+   Choose small p,q where q | (p-1).
+   Use DSA signing: r = (g^k mod p) mod q
+                   s = k^{-1} * (H(m) + x*r) mod q
+*/
+void demo_dsa() {
+    printf("=== Toy DSA demo ===\n");
+
+    // Toy parameters (small): p=23, q=11   (11 divides 22)
+    ll p = 23;
+    ll q = 11;
+    // choose h, compute g = h^{(p-1)/q} mod p with g > 1
+    ll h = 2;
+    ll g = modexp(h, (p-1)/q, p);
+    if (g <= 1) { h = 5; g = modexp(h, (p-1)/q, p); }
+
+    printf("Parameters: p=%lld q=%lld g=%lld\n", p, q, g);
+
+    // Private key x in [1,q-1]
+    ll x = 3;                     // alice private
+    ll y = modexp(g, x, p);       // public y = g^x mod p
+
+    printf("Alice private key x=%lld, public y=%lld\n", x, y);
+
+    const char *message = "HELLO";
+    ll H = simple_hash(message) % q;  // message hash reduced mod q
+
+    printf("Message: \"%s\", H mod q = %lld\n", message, H);
+
+    // Sign the same message twice using two different random k values
+    srand((unsigned)time(NULL));
+    ll r1, s1, k1;
+    do {
+        k1 = (rand() % (q-1)) + 1; // 1..q-1
+        r1 = modexp(g, k1, p) % q;
+    } while (r1 == 0);
+    ll kinv1 = modinv(k1, q);
+    s1 = ( (kinv1 * ((H + x * r1) % q)) % q );
+    if (s1 == 0) s1 = q; // ensure non-zero (toy)
+
+    ll r2, s2, k2;
+    do {
+        k2 = (rand() % (q-1)) + 1;
+        if (k2 == k1) continue;
+        r2 = modexp(g, k2, p) % q;
+    } while (r2 == 0);
+    ll kinv2 = modinv(k2, q);
+    s2 = ( (kinv2 * ((H + x * r2) % q)) % q );
+    if (s2 == 0) s2 = q;
+
+    printf("Signature 1: (r=%lld, s=%lld) using k=%lld\n", r1, s1, k1);
+    printf("Signature 2: (r=%lld, s=%lld) using k=%lld\n", r2, s2, k2);
+    if (r1 == r2 && s1 == s2) printf("Signatures are EQUAL (unexpected)\n");
+    else printf("Signatures differ (expected for DSA)\n");
+
+    // Verification function
+    auto dsa_verify = [&](ll r, ll s)->int {
+        if (r <= 0 || r >= q || s <= 0 || s >= q) return 0;
+        ll w = modinv(s, q);
+        if (w == -1) return 0;
+        ll u1 = (H * w) % q;
+        ll u2 = (r * w) % q;
+        ll v = ( (modexp(g, u1, p) * modexp(y, u2, p)) % p ) % q;
+        return (v == r);
+    };
+
+    printf("Verify sig1: %s\n", dsa_verify(r1,s1) ? "OK" : "FAIL");
+    printf("Verify sig2: %s\n", dsa_verify(r2,s2) ? "OK" : "FAIL");
+    printf("\n");
+}
+
+/* -------------------- Toy RSA (textbook) --------------------
+   Signature = m^d mod n (deterministic)
+*/
+void demo_rsa() {
+    printf("=== Toy RSA demo ===\n");
+
+    // small primes
+    ll p = 61, q = 53;
+    ll n = p * q;
+    ll phi = (p-1)*(q-1);
+    ll e = 17;
+    ll d = modinv(e, phi);
+
+    printf("RSA params: p=%lld q=%lld n=%lld e=%lld d=%lld\n", p,q,n,e,d);
+
+    const char *message = "HELLO";
+    // map message deterministically to integer m (small): use simple hash mod n
+    ll m = simple_hash(message) % n;
+    printf("Message: \"%s\", m = %lld\n", message, m);
+
+    // Sign twice
+    ll sig1 = modexp(m, d, n);
+    ll sig2 = modexp(m, d, n);
+
+    printf("RSA Signature 1: %lld\n", sig1);
+    printf("RSA Signature 2: %lld\n", sig2);
+    if (sig1 == sig2) printf("Signatures are equal (expected for textbook RSA)\n");
+    else printf("Signatures differ (unexpected)\n");
+
+    // Verify: verify signature^e mod n == m
+    ll vm1 = modexp(sig1, e, n);
+    printf("Verification: sig^e mod n = %lld (should equal m = %lld) => %s\n",
+           vm1, m, vm1 == m ? "OK" : "FAIL");
+    printf("\n");
+}
+
+int main() {
+    demo_dsa();
+    demo_rsa();
+    return 0;
+}
