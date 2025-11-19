@@ -1,0 +1,58 @@
+#include <stdio.h>
+#include <stdint.h>
+
+// fast modular exponentiation
+uint64_t modexp(uint64_t base, uint64_t exp, uint64_t mod) {
+    uint64_t result = 1;
+    base %= mod;
+    while (exp > 0) {
+        if (exp & 1) result = (result * base) % mod;
+        base = (base * base) % mod;
+        exp >>= 1;
+    }
+    return result;
+}
+
+int main() {
+    // public parameters
+    uint64_t q = 23;    // a small prime for demo; in real DH use large prime
+    uint64_t a = 5;     // public base (generator)
+
+    // Alice's secret
+    uint64_t x = 6;  
+    // Bob's secret
+    uint64_t y = 15;
+
+    // --- Standard Diffie–Hellman exchange ---
+    uint64_t A = modexp(a, x, q);  // Alice -> Bob: a^x mod q
+    uint64_t B = modexp(a, y, q);  // Bob -> Alice: a^y mod q
+
+    // Shared secret compute
+    uint64_t K_alice = modexp(B, x, q);  // (a^y)^x = a^{xy} mod q
+    uint64_t K_bob   = modexp(A, y, q);  // (a^x)^y = a^{xy} mod q
+
+    printf("=== Standard DH ===\n");
+    printf("Alice sends A = a^x mod q = %llu\n", (unsigned long long)A);
+    printf("Bob   sends B = a^y mod q = %llu\n", (unsigned long long)B);
+    printf("Alice's computed key: %llu\n", (unsigned long long)K_alice);
+    printf("Bob's   computed key: %llu\n", (unsigned long long)K_bob);
+
+    // --- Flawed scheme: they send x^a mod q instead ---
+    uint64_t A_flawed = modexp(x, a, q);
+    uint64_t B_flawed = modexp(y, a, q);
+
+    // Now they try to compute a shared key by raising received to their secret:
+    uint64_t Kf_alice = modexp(B_flawed, x, q);  // (y^a)^x = y^{a x} mod q
+    uint64_t Kf_bob   = modexp(A_flawed, y, q);   // (x^a)^y = x^{a y} mod q
+
+    printf("\n=== Flawed scheme (send x^a mod q) ===\n");
+    printf("Alice sends A_flawed = x^a mod q = %llu\n", (unsigned long long)A_flawed);
+    printf("Bob   sends B_flawed = y^a mod q = %llu\n", (unsigned long long)B_flawed);
+    printf("Alice's computed flawed key: %llu\n", (unsigned long long)Kf_alice);
+    printf("Bob's   computed flawed key: %llu\n", (unsigned long long)Kf_bob);
+
+    // --- Alternative flawed agreement: try computing x^{a y} and y^{a x}, then hash or combine ---
+    // but as seen, Kf_alice != Kf_bob generally.
+
+    return 0;
+}
