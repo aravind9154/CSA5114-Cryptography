@@ -1,0 +1,78 @@
+#include <stdio.h>
+#include <string.h>
+
+#define BLOCK 8
+
+// XOR block cipher
+void xor_block(unsigned char *out, unsigned char *in, unsigned char *key) {
+    for (int i = 0; i < BLOCK; i++)
+        out[i] = in[i] ^ key[i];
+}
+
+// Add padding: 0x80 followed by zeros
+int pad_message(unsigned char *msg, int len) {
+    msg[len++] = 0x80;       // 1 bit = 1000 0000
+    while (len % BLOCK != 0)
+        msg[len++] = 0x00;
+    return len;              // new padded length
+}
+
+// ECB encryption
+void encrypt_ecb(unsigned char *plain, unsigned char *cipher, unsigned char *key, int blocks) {
+    for (int i = 0; i < blocks; i++)
+        xor_block(cipher + i*BLOCK, plain + i*BLOCK, key);
+}
+
+// CBC encryption
+void encrypt_cbc(unsigned char *plain, unsigned char *cipher, unsigned char *key, unsigned char *iv, int blocks) {
+    unsigned char prev[BLOCK], temp[BLOCK];
+    memcpy(prev, iv, BLOCK);
+
+    for (int i = 0; i < blocks; i++) {
+        for (int j = 0; j < BLOCK; j++)
+            temp[j] = plain[i*BLOCK + j] ^ prev[j];
+
+        xor_block(cipher + i*BLOCK, temp, key);
+        memcpy(prev, cipher + i*BLOCK, BLOCK);
+    }
+}
+
+// CFB encryption (8-byte segment)
+void encrypt_cfb(unsigned char *plain, unsigned char *cipher, unsigned char *key, unsigned char *iv, int blocks) {
+    unsigned char shift[BLOCK], temp[BLOCK];
+    memcpy(shift, iv, BLOCK);
+
+    for (int i = 0; i < blocks; i++) {
+        xor_block(temp, shift, key);                   // Encrypt IV/prev ciphertext
+        for (int j = 0; j < BLOCK; j++)
+            cipher[i*BLOCK + j] = plain[i*BLOCK + j] ^ temp[j];
+
+        memcpy(shift, cipher + i*BLOCK, BLOCK);        // Shift register update
+    }
+}
+
+void print_hex(const char *label, unsigned char *data, int bytes) {
+    printf("%s: ", label);
+    for (int i = 0; i < bytes; i++)
+        printf("%02X ", data[i]);
+    printf("\n");
+}
+
+int main() {
+    unsigned char key[BLOCK] = {1,2,3,4,5,6,7,8};
+    unsigned char iv[BLOCK]  = {0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
+
+    unsigned char msg[256] = "HELLO WORLD";   // Example message
+    int len = strlen((char*)msg);
+
+    printf("Original: %s\n", msg);
+
+    // Always pad the message
+    int padded_len = pad_message(msg, len);
+    int blocks = padded_len / BLOCK;
+
+    unsigned char ecb[256], cbc[256], cfb[256];
+
+    encrypt_ecb(msg, ecb, key, blocks);
+    encrypt_cbc(msg, cbc, key, iv, blocks);
+    encrypt_cfb(msg, cfb, key, iv, blocks);
