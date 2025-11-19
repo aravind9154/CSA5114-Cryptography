@@ -1,0 +1,77 @@
+#include <stdio.h>
+
+// Compute gcd(a, b)
+long long gcd(long long a, long long b) {
+    while (b != 0) {
+        long long t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+// Extended Euclidean Algorithm
+long long extended_gcd(long long a, long long b, long long *x, long long *y) {
+    if (a == 0) {
+        *x = 0;
+        *y = 1;
+        return b;
+    }
+    long long x1, y1;
+    long long g = extended_gcd(b % a, a, &x1, &y1);
+
+    *x = y1 - (b / a) * x1;
+    *y = x1;
+
+    return g;
+}
+
+// Find modular inverse of e mod phi
+long long mod_inverse(long long e, long long phi) {
+    long long x, y;
+    long long g = extended_gcd(e, phi, &x, &y);
+
+    if (g != 1) return -1;
+
+    long long d = (x % phi + phi) % phi;
+    return d;
+}
+
+int main() {
+    long long n, e, M;
+
+    printf("Enter RSA modulus n: ");
+    scanf("%lld", &n);
+
+    printf("Enter public key e: ");
+    scanf("%lld", &e);
+
+    printf("Enter a plaintext block M: ");
+    scanf("%lld", &M);
+
+    long long g = gcd(M, n);
+
+    if (g == 1) {
+        printf("GCD(M, n) = 1 → Gives no information.\n");
+        return 0;
+    }
+
+    printf("Non-trivial gcd(M, n) = %lld → This is a factor of n!\n", g);
+
+    long long p = g;
+    long long q = n / g;
+
+    printf("p = %lld, q = %lld\n", p, q);
+
+    long long phi = (p - 1) * (q - 1);
+    printf("phi(n) = %lld\n", phi);
+
+    long long d = mod_inverse(e, phi);
+
+    if (d == -1)
+        printf("No modular inverse found! Something is wrong.\n");
+    else
+        printf("Private key d = %lld\n", d);
+
+    return 0;
+}
