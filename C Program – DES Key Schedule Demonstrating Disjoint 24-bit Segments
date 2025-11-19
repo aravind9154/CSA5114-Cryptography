@@ -1,0 +1,74 @@
+#include <stdio.h>
+#include <string.h>
+
+// Example PC-1 partitions:
+// Left 28 bits come from first subset
+// Right 28 bits come from second subset
+
+// DES shift schedule
+int shifts[16] = {
+    1, 1, 2, 2, 2, 2, 2, 2,
+    1, 2, 2, 2, 2, 2, 2, 1
+};
+
+// PC-2 (subkey selection)
+int PC2[48] = {
+    14, 17, 11, 24,  1,  5, 
+     3, 28, 15,  6, 21, 10, 
+    23, 19, 12,  4, 26,  8, 
+    16,  7, 27, 20, 13,  2,
+    41, 52, 31, 37, 47, 55, 
+    30, 40, 51, 45, 33, 48, 
+    44, 49, 39, 56, 34, 53, 
+    46, 42, 50, 36, 29, 32
+};
+
+// Circular left shift of 28-bit half
+void left_shift(char *half, int shiftCount) {
+    char temp[2] = {half[0], half[1]};
+    for (int s = 0; s < shiftCount; s++) {
+        char first = half[0];
+        for (int i = 0; i < 27; i++)
+            half[i] = half[i + 1];
+        half[27] = first;
+    }
+}
+
+// Apply PC2 to generate 48-bit subkey
+void generate_subkey(char C[28], char D[28], char K[48]) {
+    char CD[56];
+    for (int i = 0; i < 28; i++) CD[i] = C[i];
+    for (int i = 0; i < 28; i++) CD[i + 28] = D[i];
+
+    for (int i = 0; i < 48; i++)
+        K[i] = CD[PC2[i] - 1];
+}
+
+int main() {
+    char key[56];
+
+    printf("Enter 56-bit DES key (as 0/1): ");
+    scanf("%56s", key);
+
+    // Split into two disjoint 28-bit subsets
+    char C[28], D[28];
+    for (int i = 0; i < 28; i++) C[i] = key[i];
+    for (int i = 0; i < 28; i++) D[i] = key[i + 28];
+
+    printf("\n16 DES Subkeys (First 24 bits from C, Last 24 bits from D):\n\n");
+
+    for (int round = 0; round < 16; round++) {
+        left_shift(C, shifts[round]);
+        left_shift(D, shifts[round]);
+
+        char K[48];
+        generate_subkey(C, D, K);
+
+        printf("K%2d: ", round + 1);
+        for (int i = 0; i < 48; i++)
+            printf("%c", K[i]);
+        printf("\n");
+    }
+
+    return 0;
+}
