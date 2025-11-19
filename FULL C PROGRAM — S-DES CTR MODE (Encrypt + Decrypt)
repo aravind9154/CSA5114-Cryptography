@@ -1,0 +1,189 @@
+#include <stdio.h>
+#include <stdint.h>
+
+// ------------------ PERMUTATIONS ------------------
+int P10[10]  = {3,5,2,7,4,10,1,9,8,6};
+int P8[8]    = {6,3,7,4,8,5,10,9};
+int IP[8]    = {2,6,3,1,4,8,5,7};
+int IP_INV[8]= {4,1,3,5,7,2,8,6};
+int EP[8]    = {4,1,2,3,2,3,4,1};
+int P4[4]    = {2,4,3,1};
+
+// S-boxes
+int S0[4][4] = {
+    {1,0,3,2},
+    {3,2,1,0},
+    {0,2,1,3},
+    {3,1,3,2}
+};
+int S1[4][4] = {
+    {0,1,2,3},
+    {2,0,1,3},
+    {3,0,1,0},
+    {2,1,0,3}
+};
+
+// ------------------ UTILITY ------------------
+uint8_t permute(uint16_t in, int *p, int n)
+{
+    uint8_t out = 0;
+    for(int i=0;i<n;i++)
+    {
+        out <<= 1;
+        out |= (in >> (8 - p[i])) & 1;
+    }
+    return out;
+}
+
+uint16_t left_shift_5(uint16_t x)
+{
+    uint16_t left = (x >> 5) & 0x1F;
+    uint16_t right = x & 0x1F;
+
+    left = ((left << 1) | (left >> 4)) & 0x1F;
+    right = ((right << 1) | (right >> 4)) & 0x1F;
+
+    return ((left << 5) | right);
+}
+
+// ------------------ KEY GENERATION ------------------
+void generate_keys(uint16_t key, uint8_t *K1, uint8_t *K2)
+{
+    uint16_t P10_key = 0;
+
+    for (int i=0; i<10; i++)
+    {
+        P10_key <<= 1;
+        P10_key |= (key >> (10 - P10[i])) & 1;
+    }
+
+    uint16_t LS1 = left_shift_5(P10_key);
+
+    uint8_t k1 = 0;
+    for (int i=0; i<8; i++)
+    {
+        k1 <<= 1;
+        k1 |= (LS1 >> (10 - P8[i])) & 1;
+    }
+
+    uint16_t LS2 = left_shift_5(left_shift_5(LS1));
+
+    uint8_t k2 = 0;
+    for (int i=0; i<8; i++)
+    {
+        k2 <<= 1;
+        k2 |= (LS2 >> (10 - P8[i])) & 1;
+    }
+
+    *K1 = k1;
+    *K2 = k2;
+}
+
+uint8_t fk(uint8_t half, uint8_t subkey)
+{
+    uint8_t expanded = 0;
+
+    for(int i=0;i<8;i++)
+    {
+        expanded <<= 1;
+        expanded |= (half >> (4 - EP[i])) & 1;
+    }
+
+    expanded ^= subkey;
+
+    uint8_t left = (expanded >> 4) & 0x0F;
+    uint8_t right = expanded & 0x0F;
+
+    int row = ((left & 0x8) >> 2) | (left & 1);
+    int col = (left >> 1) & 0x3;
+    int s0val = S0[row][col];
+
+    row = ((right & 0x8) >> 2) | (right & 1);
+    col = (right >> 1) & 0x3;
+    int s1val = S1[row][col];
+
+    uint8_t s_output = (s0val << 2) | s1val;
+
+    uint8_t P4_out = 0;
+    for(int i=0;i<4;i++)
+    {
+        P4_out <<= 1;
+        P4_out |= (s_output >> (4 - P4[i])) & 1;
+    }
+
+    return P4_out;
+}
+
+uint8_t sdes_encrypt_block(uint8_t pt, uint8_t K1, uint8_t K2)
+{
+    uint8_t temp = permute(pt, IP, 8);
+    uint8_t left = (temp >> 4) & 0xF;
+    uint8_t right = temp & 0xF;
+
+    uint8_t f = fk(right, K1);
+    left ^= f;
+
+    uint8_t tmp = left;
+    left = right;
+    right = tmp;
+
+    f = fk(right, K2);
+    left ^= f;
+
+    uint8_t pre_output = (left << 4) | right;
+    return permute(pre_output, IP_INV, 8);
+}
+
+// ------------------ CTR MODE ------------------
+void ctr_encrypt(uint8_t *plaintext, uint8_t *ciphertext, int blocks,
+                 uint8_t K1, uint8_t K2)
+{
+    uint8_t counter = 0x00;
+
+    for(int i=0;i<blocks;i++)
+    {
+        uint8_t stream = sdes_encrypt_block(counter, K1, K2);
+        ciphertext[i] = plaintext[i] ^ stream;
+        counter++;
+    }
+}
+
+void ctr_decrypt(uint8_t *ciphertext, uint8_t *plaintext, int blocks,
+                 uint8_t K1, uint8_t K2)
+{
+    uint8_t counter = 0x00;
+
+    for(int i=0;i<blocks;i++)
+    {
+        uint8_t stream = sdes_encrypt_block(counter, K1, K2);
+        plaintext[i] = ciphertext[i] ^ stream;
+        counter++;
+    }
+}
+
+// ------------------ MAIN ------------------
+int main()
+{
+    uint8_t plaintext[3] = {0x01, 0x02, 0x04}; // 3 blocks
+    uint8_t ciphertext[3];
+    uint8_t decrypted[3];
+
+    uint16_t key = 0x1FD;  // 01111 11101
+    uint8_t K1, K2;
+
+    generate_keys(key, &K1, &K2);
+
+    ctr_encrypt(plaintext, ciphertext, 3, K1, K2);
+
+    printf("CTR Ciphertext:\n");
+    for(int i=0;i<3;i++)
+        printf("%02X ", ciphertext[i]);
+
+    printf("\n\nCTR Decryption:\n");
+    ctr_decrypt(ciphertext, decrypted, 3, K1, K2);
+
+    for(int i=0;i<3;i++)
+        printf("%02X ", decrypted[i]);
+
+    printf("\n");
+}
