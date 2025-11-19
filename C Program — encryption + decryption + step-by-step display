@@ -1,0 +1,109 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+int mod26(int x) {
+    x %= 26;
+    if (x < 0) x += 26;
+    return x;
+}
+
+void preprocess(const char *in, char *out) {
+    int j = 0;
+    for (int i = 0; in[i] != '\0'; ++i) {
+        if (isalpha((unsigned char)in[i])) {
+            out[j++] = toupper((unsigned char)in[i]);
+        }
+    }
+    out[j] = '\0';
+    if (j % 2 != 0) {
+        out[j++] = 'X';   // pad with X if odd length
+        out[j] = '\0';
+    }
+}
+
+void encrypt_blocks(const char *plain, char *cipher,
+                    int K[2][2]) {
+    int n = strlen(plain);
+    int idx = 0;
+    for (int i = 0; i < n; i += 2) {
+        int p1 = plain[i] - 'A';
+        int p2 = plain[i+1] - 'A';
+
+        int c1 = mod26(K[0][0]*p1 + K[0][1]*p2);
+        int c2 = mod26(K[1][0]*p1 + K[1][1]*p2);
+
+        cipher[i] = (char)(c1 + 'A');
+        cipher[i+1] = (char)(c2 + 'A');
+
+        printf("Encrypt pair %c%c -> nums (%2d,%2d) : ", plain[i], plain[i+1], p1, p2);
+        printf("K*[%2d %2d]^T = (%3d,%3d) mod26 -> %c%c\n",
+               p1, p2, c1, c2, cipher[i], cipher[i+1]);
+
+        idx += 2;
+    }
+    cipher[idx] = '\0';
+}
+
+void decrypt_blocks(const char *cipher, char *plain,
+                    int Kinv[2][2]) {
+    int n = strlen(cipher);
+    int idx = 0;
+    for (int i = 0; i < n; i += 2) {
+        int c1 = cipher[i] - 'A';
+        int c2 = cipher[i+1] - 'A';
+
+        int p1 = mod26(Kinv[0][0]*c1 + Kinv[0][1]*c2);
+        int p2 = mod26(Kinv[1][0]*c1 + Kinv[1][1]*c2);
+
+        plain[i] = (char)(p1 + 'A');
+        plain[i+1] = (char)(p2 + 'A');
+
+        printf("Decrypt pair %c%c -> nums (%2d,%2d) : ", cipher[i], cipher[i+1], c1, c2);
+        printf("Kinv*[%2d %2d]^T = (%3d,%3d) mod26 -> %c%c\n",
+               c1, c2, p1, p2, plain[i], plain[i+1]);
+
+        idx += 2;
+    }
+    plain[idx] = '\0';
+}
+
+int main() {
+    const char *message = "meet me at the usual place at ten rather than eight oclock";
+    char cleaned[512];
+    char cipher[512];
+    char recovered[512];
+
+    // Given key matrix K = [[9,4],[5,7]]
+    int K[2][2] = {{9,4},{5,7}};
+
+    // Precomputed inverse K^{-1} = [[5,12],[15,25]]
+    int Kinv[2][2] = {{5,12},{15,25}};
+
+    printf("Original message:\n%s\n\n", message);
+
+    // Preprocess
+    preprocess(message, cleaned);
+    printf("Preprocessed (letters only, uppercase, padded):\n%s\n\n", cleaned);
+
+    // Encrypt
+    printf("---- ENCRYPTION STEPS ----\n");
+    encrypt_blocks(cleaned, cipher, K);
+    printf("\nCiphertext (joined):\n%s\n\n", cipher);
+
+    // Decrypt
+    printf("---- DECRYPTION STEPS ----\n");
+    decrypt_blocks(cipher, recovered, Kinv);
+    printf("\nRecovered plaintext (with padding):\n%s\n\n", recovered);
+
+    // Optional: remove trailing padding X if present
+    int len = strlen(recovered);
+    if (len > 0 && recovered[len-1] == 'X') {
+        recovered[len-1] = '\0';
+        printf("Recovered plaintext (padding removed):\n%s\n", recovered);
+    } else {
+        printf("Recovered plaintext (no padding to remove):\n%s\n", recovered);
+    }
+
+    return 0;
+}
