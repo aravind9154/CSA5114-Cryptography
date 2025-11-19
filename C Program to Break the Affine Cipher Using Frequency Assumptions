@@ -1,0 +1,52 @@
+#include <stdio.h>
+
+// Function to compute gcd
+int gcd(int a, int b) {
+    while (b != 0) {
+        int temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+// Function to find multiplicative inverse mod 26
+int modInverse(int a) {
+    for (int x = 1; x < 26; x++) {
+        if ((a * x) % 26 == 1)
+            return x;
+    }
+    return -1;
+}
+
+int main() {
+    char c1 = 'B';  // most frequent ciphertext letter
+    char c2 = 'U';  // second most frequent ciphertext
+    char p1 = 'E';  // assumed plaintext most frequent
+    char p2 = 'T';  // assumed plaintext second frequent
+
+    int C1 = c1 - 'A';
+    int C2 = c2 - 'A';
+    int P1 = p1 - 'A';
+    int P2 = p2 - 'A';
+
+    int a_num = (C2 - C1 + 26) % 26;      // (C2 - C1)
+    int p_num = (P2 - P1 + 26) % 26;      // (P2 - P1)
+
+    int inv = modInverse(p_num);
+
+    if (inv == -1) {
+        printf("No inverse exists, cannot solve.\n");
+        return 0;
+    }
+
+    int a = (a_num * inv) % 26;
+    int b = (C1 - a * P1) % 26;
+    if (b < 0) b += 26;
+
+    printf("Recovered affine cipher key:\n");
+    printf("a = %d\n", a);
+    printf("b = %d\n", b);
+
+    return 0;
+}
