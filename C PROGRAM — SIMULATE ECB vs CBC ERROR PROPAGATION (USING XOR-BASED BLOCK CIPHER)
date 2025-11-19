@@ -1,0 +1,83 @@
+#include <stdio.h>
+#include <string.h>
+
+#define BLOCK 8   // 8-byte block
+
+void xor_block(unsigned char *out, unsigned char *in, unsigned char *key) {
+    for (int i = 0; i < BLOCK; i++)
+        out[i] = in[i] ^ key[i];
+}
+
+void encrypt_ecb(unsigned char *plain, unsigned char *cipher, unsigned char *key, int blocks) {
+    for (int i = 0; i < blocks; i++)
+        xor_block(cipher + i * BLOCK, plain + i * BLOCK, key);
+}
+
+void decrypt_ecb(unsigned char *cipher, unsigned char *plain, unsigned char *key, int blocks) {
+    for (int i = 0; i < blocks; i++)
+        xor_block(plain + i * BLOCK, cipher + i * BLOCK, key);
+}
+
+void encrypt_cbc(unsigned char *plain, unsigned char *cipher, unsigned char *key, unsigned char *iv, int blocks) {
+    unsigned char temp[BLOCK];
+
+    memcpy(temp, iv, BLOCK);
+
+    for (int i = 0; i < blocks; i++) {
+        unsigned char x[BLOCK];
+        for (int j = 0; j < BLOCK; j++)
+            x[j] = plain[i * BLOCK + j] ^ temp[j];
+
+        xor_block(cipher + i * BLOCK, x, key);
+
+        memcpy(temp, cipher + i * BLOCK, BLOCK); // CBC chain
+    }
+}
+
+void decrypt_cbc(unsigned char *cipher, unsigned char *plain, unsigned char *key, unsigned char *iv, int blocks) {
+    unsigned char prev[BLOCK], temp[BLOCK];
+
+    memcpy(prev, iv, BLOCK);
+
+    for (int i = 0; i < blocks; i++) {
+        xor_block(temp, cipher + i * BLOCK, key);
+
+        for (int j = 0; j < BLOCK; j++)
+            plain[i * BLOCK + j] = temp[j] ^ prev[j];
+
+        memcpy(prev, cipher + i * BLOCK, BLOCK);
+    }
+}
+
+void print_hex(const char *label, unsigned char *data, int bytes) {
+    printf("%s: ", label);
+    for (int i = 0; i < bytes; i++) printf("%02X ", data[i]);
+    printf("\n");
+}
+
+int main() {
+    unsigned char key[BLOCK] = {1,2,3,4,5,6,7,8};
+    unsigned char iv[BLOCK]  = {0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA,0xAA};
+
+    unsigned char plain[16] = "HELLOWORLD12345"; // 2 blocks
+    unsigned char cipher_ecb[16], cipher_cbc[16];
+    unsigned char recv_cbc[16];
+
+    printf("Original Plaintext:\n%s\n\n", plain);
+
+    // Encrypt CBC
+    encrypt_cbc(plain, cipher_cbc, key, iv, 2);
+
+    print_hex("CBC Cipher", cipher_cbc, 16);
+
+    // Introduce 1-bit transmission error in C1
+    cipher_cbc[0] ^= 0x01;
+
+    print_hex("Cipher after 1-bit error", cipher_cbc, 16);
+
+    decrypt_cbc(cipher_cbc, recv_cbc, key, iv, 2);
+
+    print_hex("Decrypted with error", recv_cbc, 16);
+
+    return 0;
+}
